@@ -83,6 +83,14 @@ pub enum OperatorType {
     D,
     OD,
 }
+impl OperatorType {
+    pub fn flip(&mut self) {
+        *self = match self {
+            OperatorType::D => OperatorType::OD,
+            OperatorType::OD => OperatorType::D,
+        }
+    }
+}
 
 pub struct Operator {
     pub operator_type: OperatorType,
@@ -221,8 +229,48 @@ impl State {
                 );
             }
         }
+        //check that operators sit on oposing spins and that alpha loops
+        let mut current = self.alpha.clone();
+        for (i, op) in self.path.iter().enumerate() {
+            if let Some(op) = op {
+                assert_eq!(
+                    current[op.even], !current[op.odd],
+                    "op {} not oposing spins",
+                    i
+                );
+                if op.operator_type == OperatorType::OD {
+                    current[op.even] ^= true;
+                    current[op.odd] ^= true;
+                }
+            }
+        }
+        assert_eq!(current, self.alpha, "alpha not a loop");
     }
-    pub fn directed_loop_update(&mut self, idx: usize, mut even: bool, mut dir: bool) {
-        let mut idx2 = idx;
+    pub fn directed_loop_update(&mut self, start: usize) -> usize {
+        let mut idx = start;
+        let mut len = 0;
+        loop {
+            //going up
+            let next = self.path[idx].as_ref().unwrap().even_out_id;
+            if next <= idx {
+                self.alpha[self.path[idx].as_ref().unwrap().even] ^= true;
+            }
+            idx = next;
+
+            self.path[idx].as_mut().unwrap().operator_type.flip();
+
+            //going down
+            let next = self.path[idx].as_ref().unwrap().odd_in_id;
+            if next >= idx {
+                self.alpha[self.path[idx].as_ref().unwrap().odd] ^= true;
+            }
+            idx = next;
+
+            self.path[idx].as_mut().unwrap().operator_type.flip();
+            len += 1;
+            if next == start {
+                return len;
+            }
+        }
     }
 }
