@@ -2,15 +2,13 @@ use rand::{rngs::ThreadRng, Rng};
 use std::{mem::swap, vec};
 
 fn main() {
-    let latice = Latice::new(4, 4);
+    let latice = Latice::new(8, 8);
     let rng = &mut rand::thread_rng();
-    let mut s = State::new(&latice, 100, rng);
-    for _ in 0..100 {
-        s.diagonal_update(&latice, 2.0, 1.0, rng);
-    }
-    s.off_diagonal_update(100, rng);
+    let mut s = State::new(&latice, 10, rng);
+    let nloop = s.thermalize(&latice, 2.0, 1.0, rng);
     s.verify();
     println!("n1: {}, n2: {}", s.n1, s.n2);
+    println!("nloop: {}", nloop);
     let mut count_od = 0;
     for op in s.path.iter() {
         if let Some(op) = op {
@@ -132,6 +130,7 @@ pub struct Operator {
     pub edge_type: EdgeType,
 }
 
+#[derive(Clone)]
 pub struct State {
     pub alpha: Vec<bool>,
     pub path: Vec<Option<Operator>>,
@@ -377,19 +376,55 @@ impl State {
             };
         }
     }
-    pub fn off_diagonal_update(&mut self, nloop: usize, rng: &mut ThreadRng) {
+    pub fn off_diagonal_update(&mut self, nloop: usize, rng: &mut ThreadRng) -> usize {
         let mut idxs = Vec::new();
         for (i, op) in self.path.iter().enumerate() {
             if op.is_some() {
                 idxs.push(i);
             }
         }
+        let mut count = 0;
         for _ in 0..nloop {
             let idx = idxs[rng.gen_range(0..idxs.len())];
-            self.directed_loop_update(idx);
+            count += self.directed_loop_update(idx);
         }
+        count
     }
 
+    pub fn thermalize(
+        &mut self,
+        latice: &Latice,
+        beta: f64,
+        j1: f64,
+        rng: &mut ThreadRng,
+    ) -> usize {
+        let mut nloop = 10;
+        let mut plato = 0;
+        let mut touched = 0;
+        loop {
+            self.diagonal_update(latice, beta, j1, rng);
+            touched += self.off_diagonal_update(nloop, rng);
+            if self.n1 + self.n2 > self.path.len() * 8 / 10 {
+                for _ in 0..self.path.len() * 2 / 10 {
+                    self.path.push(None);
+                }
+                nloop = self.path.len() * nloop * plato / touched;
+                if nloop == 0 {
+                    nloop = 1;
+                }
+                plato = 0;
+            }
+            //self.verify();
+            if plato == 10000 {
+                nloop = self.path.len() * nloop * plato / touched;
+                if nloop == 0 {
+                    nloop = 1;
+                }
+                return nloop;
+            }
+            plato += 1;
+        }
+    }
     pub fn new(latice: &Latice, M: usize, rng: &mut ThreadRng) -> State {
         let mut alpha = Vec::new();
         for _ in 0..latice.width * latice.height {
