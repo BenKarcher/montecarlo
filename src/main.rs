@@ -2,22 +2,21 @@ use rand::{rngs::ThreadRng, Rng};
 use std::{mem::swap, vec};
 
 fn main() {
-    let latice = Latice::new(8, 8);
+    let latice = Latice::new(4, 2);
     let rng = &mut rand::thread_rng();
     let mut s = State::new(&latice, 10, rng);
-    let nloop = s.thermalize(&latice, 2.0, 1.0, rng);
-    s.verify();
-    println!("n1: {}, n2: {}", s.n1, s.n2);
-    println!("nloop: {}", nloop);
-    let mut count_od = 0;
-    for op in s.path.iter() {
-        if let Some(op) = op {
-            if op.operator_type == OperatorType::OD {
-                count_od += 1;
-            }
-        }
+    let beta = 4.0;
+    let j1 = 0.0;
+    let nloop = s.thermalize(&latice, beta, j1, rng);
+    let mut measurments = Vec::new();
+    for _ in 0..10000 {
+        s.diagonal_update(&latice, beta, j1, rng);
+        s.off_diagonal_update(nloop, rng);
+        measurments.push(s.n1 + s.n2);
     }
-    println!("count_od: {}", count_od);
+    let mean: f64 = measurments.iter().sum::<usize>() as f64 / measurments.len() as f64;
+    let energy = -mean / beta + latice.edges.len() as f64 / 4.0;
+    println!("energy: {}", energy);
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
