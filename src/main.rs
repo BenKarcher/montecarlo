@@ -58,15 +58,15 @@ impl Latice {
         for i in 0..width {
             for j in 0..height {
                 l.add_edge(
-                    EdgeType::One,
+                    EdgeType::Two,
                     l.node_id(i, j),
                     l.node_id((i + 1) % width, j),
                 );
                 l.add_edge(
                     if j % 2 == 0 {
-                        EdgeType::Two
-                    } else {
                         EdgeType::One
+                    } else {
+                        EdgeType::Two
                     },
                     l.node_id(i, j),
                     l.node_id(i, (j + 1) % height),
@@ -100,6 +100,7 @@ pub struct Operator {
     pub odd_in_id: usize,
     pub even_out_id: usize,
     pub odd_out_id: usize,
+    pub edge_type: EdgeType,
 }
 
 pub struct State {
@@ -131,7 +132,7 @@ impl State {
         }
         a
     }
-    pub fn insert_diag(&mut self, even: usize, odd: usize, idx: usize) {
+    pub fn insert_diag(&mut self, even: usize, odd: usize, idx: usize, edge_type: EdgeType) {
         assert!(self.path[idx].is_none(), "idx must be empty");
         let op = Operator {
             operator_type: OperatorType::D,
@@ -141,6 +142,7 @@ impl State {
             odd_in_id: self.trace(odd, idx, false),
             even_out_id: self.trace(even, idx, true),
             odd_out_id: self.trace(odd, idx, true),
+            edge_type: edge_type,
         };
         if op.even_in_id != idx {
             self.path[op.even_in_id].as_mut().unwrap().even_out_id = idx;
@@ -245,6 +247,19 @@ impl State {
             }
         }
         assert_eq!(current, self.alpha, "alpha not a loop");
+        //check that counts of each edge type are correct
+        let mut n1 = 0;
+        let mut n2 = 0;
+        for op in self.path.iter() {
+            if let Some(op) = op {
+                match op.edge_type {
+                    EdgeType::One => n1 += 1,
+                    EdgeType::Two => n2 += 1,
+                }
+            }
+        }
+        assert_eq!(n1, self.n1, "n1 count error");
+        assert_eq!(n2, self.n2, "n2 count error");
     }
     pub fn directed_loop_update(&mut self, start: usize) -> usize {
         let mut idx = start;
