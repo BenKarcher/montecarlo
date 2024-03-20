@@ -1,3 +1,4 @@
+use rand::{rngs::ThreadRng, Rng};
 use std::mem::swap;
 
 fn main() {
@@ -10,6 +11,7 @@ pub enum EdgeType {
     Two,
 }
 
+#[derive(Clone)]
 pub struct Edge {
     pub edge_type: EdgeType,
     pub even: usize,
@@ -75,6 +77,9 @@ impl Latice {
         }
         l
     }
+    pub fn random_edge(&self, mut rng: &mut ThreadRng) -> Edge {
+        self.edges[rng.gen_range(0..self.edges.len())].clone()
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -92,6 +97,7 @@ impl OperatorType {
     }
 }
 
+#[derive(Clone)]
 pub struct Operator {
     pub operator_type: OperatorType,
     pub even: usize,
@@ -134,6 +140,10 @@ impl State {
     }
     pub fn insert_diag(&mut self, even: usize, odd: usize, idx: usize, edge_type: EdgeType) {
         assert!(self.path[idx].is_none(), "idx must be empty");
+        match edge_type {
+            EdgeType::One => self.n1 += 1,
+            EdgeType::Two => self.n2 += 1,
+        }
         let op = Operator {
             operator_type: OperatorType::D,
             even,
@@ -160,6 +170,10 @@ impl State {
     }
     pub fn delete(&mut self, idx: usize) {
         let op = self.path[idx].take().unwrap();
+        match op.edge_type {
+            EdgeType::One => self.n1 -= 1,
+            EdgeType::Two => self.n2 -= 1,
+        }
         if op.even_in_id != idx {
             self.path[op.even_in_id].as_mut().unwrap().even_out_id = op.even_out_id;
         }
@@ -286,6 +300,58 @@ impl State {
             if next == start {
                 return len;
             }
+        }
+    }
+    pub fn diagonal_update(&mut self, latice: &Latice, beta: f64, j1: f64, rng: &mut ThreadRng) {
+        let mut current = self.alpha.clone();
+        for (i, op) in self.path.clone().iter().enumerate() {
+            match op {
+                Some(Operator {
+                    operator_type: OperatorType::OD,
+                    even,
+                    odd,
+                    ..
+                }) => {
+                    current[*even] ^= true;
+                    current[*odd] ^= true;
+                }
+                Some(Operator {
+                    operator_type: OperatorType::D,
+                    edge_type,
+                    ..
+                }) => {
+                    //check if removal is accepted
+                    let p = (self.path.len() - self.n1 - self.n2 + 1) as f64
+                        / (latice.edges.len() as f64
+                            * beta
+                            * 0.5
+                            * match edge_type {
+                                EdgeType::One => j1,
+                                EdgeType::Two => 1.0,
+                            });
+                    if rng.gen::<f64>() < p {
+                        self.delete(i);
+                    }
+                }
+                None => {
+                    //check if insertion is accepted
+                    let edge = latice.random_edge(rng);
+                    if current[edge.even] == current[edge.odd] {
+                        continue;
+                    }
+                    let p = (latice.edges.len() as f64
+                        * beta
+                        * 0.5
+                        * match latice.edges[i].edge_type {
+                            EdgeType::One => j1,
+                            EdgeType::Two => 1.0,
+                        })
+                        / (self.path.len() - self.n1 - self.n2) as f64;
+                    if rng.gen::<f64>() < p {
+                        self.insert_diag(edge.even, edge.odd, i, edge.edge_type);
+                    }
+                }
+            };
         }
     }
 }
