@@ -1,8 +1,25 @@
 use rand::{rngs::ThreadRng, Rng};
-use std::mem::swap;
+use std::{mem::swap, vec};
 
 fn main() {
-    println!("Hello, world!");
+    let latice = Latice::new(4, 4);
+    let rng = &mut rand::thread_rng();
+    let mut s = State::new(&latice, 100, rng);
+    for _ in 0..100 {
+        s.diagonal_update(&latice, 2.0, 1.0, rng);
+    }
+    s.off_diagonal_update(100, rng);
+    s.verify();
+    println!("n1: {}, n2: {}", s.n1, s.n2);
+    let mut count_od = 0;
+    for op in s.path.iter() {
+        if let Some(op) = op {
+            if op.operator_type == OperatorType::OD {
+                count_od += 1;
+            }
+        }
+    }
+    println!("count_od: {}", count_od);
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -23,26 +40,32 @@ pub struct Latice {
     pub edges: Vec<Edge>,
 }
 impl Latice {
+    //nodes zigzag to make graph bipartite over even odd partition
     pub fn node_id(&self, x: usize, y: usize) -> usize {
         assert!(
             x < self.width && y < self.height,
             "x and y must be less than width and height"
         );
-        y * self.width + x
+        y * self.width + if y % 2 == 0 { x } else { self.width - x - 1 }
     }
     pub fn node_pos(&self, id: usize) -> (usize, usize) {
         assert!(
             id < self.width * self.height,
             "id must be less than width*height"
         );
-        (id % self.width, id / self.width)
+        let h = id / self.width;
+        if h % 2 == 0 {
+            (id % self.width, h)
+        } else {
+            (self.width - id % self.width - 1, h)
+        }
     }
     fn add_edge(&mut self, edge_type: EdgeType, mut a: usize, mut b: usize) {
         if b % 2 == 0 {
             swap(&mut a, &mut b);
         }
-        assert_eq!(a % 2, 0, "a must be even");
-        assert_eq!(b % 2, 1, "b must be odd");
+        assert_eq!(a % 2, 0, "a must be even, got {}", a);
+        assert_eq!(b % 2, 1, "b must be odd, got {}", b);
         self.edges.push(Edge {
             edge_type,
             even: a,
@@ -136,7 +159,7 @@ impl State {
                 }
             }
         }
-        a
+        idx
     }
     pub fn insert_diag(&mut self, even: usize, odd: usize, idx: usize, edge_type: EdgeType) {
         assert!(self.path[idx].is_none(), "idx must be empty");
@@ -342,7 +365,7 @@ impl State {
                     let p = (latice.edges.len() as f64
                         * beta
                         * 0.5
-                        * match latice.edges[i].edge_type {
+                        * match edge.edge_type {
                             EdgeType::One => j1,
                             EdgeType::Two => 1.0,
                         })
@@ -353,5 +376,33 @@ impl State {
                 }
             };
         }
+    }
+    pub fn off_diagonal_update(&mut self, nloop: usize, rng: &mut ThreadRng) {
+        let mut idxs = Vec::new();
+        for (i, op) in self.path.iter().enumerate() {
+            if op.is_some() {
+                idxs.push(i);
+            }
+        }
+        for _ in 0..nloop {
+            let idx = idxs[rng.gen_range(0..idxs.len())];
+            self.directed_loop_update(idx);
+        }
+    }
+
+    pub fn new(latice: &Latice, M: usize, rng: &mut ThreadRng) -> State {
+        let mut alpha = Vec::new();
+        for _ in 0..latice.width * latice.height {
+            alpha.push(rng.gen());
+        }
+        let path = vec![None; M];
+        let s = State {
+            alpha,
+            path,
+            n1: 0,
+            n2: 0,
+        };
+        s.verify();
+        s
     }
 }
