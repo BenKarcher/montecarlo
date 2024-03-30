@@ -1,22 +1,64 @@
 use rand::{rngs::ThreadRng, Rng};
+use std::time::Instant;
 use std::{mem::swap, vec};
 
+fn write_csv(filename: &str, x_data: &Vec<f64>, y_data: &Vec<f64>) {
+    let mut wtr = csv::Writer::from_path(filename).unwrap();
+    for (x, y) in x_data.iter().zip(y_data.iter()) {
+        wtr.write_record(&[x.to_string(), y.to_string()]).unwrap();
+    }
+    wtr.flush().unwrap();
+}
+
+fn calc_mean(samples: &[u128]) -> f64 {
+    samples.iter().sum::<u128>() as f64 / samples.len() as f64
+}
+
+fn calc_sd(samples: &[u128]) -> f64 {
+    let m = calc_mean(samples);
+    let v = samples.iter().map(|x| (*x as f64 - m).powi(2)).sum::<f64>() / samples.len() as f64;
+    v.sqrt()
+}
+pub fn range(min: f64, max: f64, n: usize) -> Vec<f64> {
+    let mut v = Vec::new();
+    let step = (max - min) / n as f64;
+    for i in 0..n {
+        v.push(min + i as f64 * step);
+    }
+    v
+}
 fn main() {
     let latice = Latice::new(4, 2);
     let rng = &mut rand::thread_rng();
     let mut s = State::new(&latice, 10, rng);
-    let beta = 4.0;
-    let j1 = 0.0;
-    let nloop = s.thermalize(&latice, beta, j1, rng);
-    let mut measurments = Vec::new();
-    for _ in 0..10000 {
-        s.diagonal_update(&latice, beta, j1, rng);
-        s.off_diagonal_update(nloop, rng);
-        measurments.push(s.n1 + s.n2);
+    let beta = 16.0;
+    //let j1 = 1.0;
+    //let weights = latice.staggered_magnetization_weights();
+    let nloop = s.thermalize(&latice, beta, 0.0, rng);
+
+    // let js = range(0.0, 2.0, 20);
+    // let mut y_data = Vec::new();
+    // for j1 in js.clone() {
+    //     let nloop = s.thermalize(&latice, beta, j1, rng);
+    //     let (mean_n, mag) = s.sample_avg(1000, &weights, nloop, &latice, beta, j1, rng);
+    //     let energy = -mean_n / beta + latice.edges.len() as f64 / 4.0;
+    //     y_data.push(energy);
+    // }
+    let js = range(0.0, 2.0, 20);
+    let mut y_data = Vec::new();
+    for j1 in js.clone() {
+        let mut measurments = Vec::new();
+        for _ in 0..10000 {
+            s.diagonal_update(&latice, beta, j1, rng);
+            s.off_diagonal_update(nloop, rng);
+            measurments.push(s.n1 + s.n2);
+        }
+        let mean: f64 = measurments.iter().sum::<usize>() as f64 / measurments.len() as f64;
+        let energy = -mean / beta + latice.edges.len() as f64 / 4.0;
+        y_data.push(energy);
+        println!("energy: {}", energy);
     }
-    let mean: f64 = measurments.iter().sum::<usize>() as f64 / measurments.len() as f64;
-    let energy = -mean / beta + latice.edges.len() as f64 / 4.0;
-    println!("energy: {}", energy);
+    write_csv("data.csv", &js, &y_data);
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -97,8 +139,18 @@ impl Latice {
         }
         l
     }
-    pub fn random_edge(&self, mut rng: &mut ThreadRng) -> Edge {
+    pub fn random_edge(&self, rng: &mut ThreadRng) -> Edge {
         self.edges[rng.gen_range(0..self.edges.len())].clone()
+    }
+    pub fn staggered_magnetization_weights(&self) -> Vec<f64> {
+        let mut weights = vec![0.0; self.width * self.height];
+        for x in 0..self.width {
+            for y in 0..self.height {
+                let id = self.node_id(x, y);
+                weights[id] = if (y) % 2 == 0 { 1.0 } else { -1.0 };
+            }
+        }
+        weights
     }
 }
 
@@ -325,7 +377,8 @@ impl State {
     }
     pub fn diagonal_update(&mut self, latice: &Latice, beta: f64, j1: f64, rng: &mut ThreadRng) {
         let mut current = self.alpha.clone();
-        for (i, op) in self.path.clone().iter().enumerate() {
+        for i in 0..self.path.len() {
+            let op = &self.path[i];
             match op {
                 Some(Operator {
                     operator_type: OperatorType::OD,
@@ -351,6 +404,7 @@ impl State {
                                 EdgeType::Two => 1.0,
                             });
                     if rng.gen::<f64>() < p {
+                        //if 1.0 < p {
                         self.delete(i);
                     }
                 }
@@ -369,6 +423,7 @@ impl State {
                         })
                         / (self.path.len() - self.n1 - self.n2) as f64;
                     if rng.gen::<f64>() < p {
+                        //if 0.0 < p {
                         self.insert_diag(edge.even, edge.odd, i, edge.edge_type);
                     }
                 }
@@ -383,6 +438,9 @@ impl State {
             }
         }
         let mut count = 0;
+        if idxs.is_empty() {
+            return 0;
+        }
         for _ in 0..nloop {
             let idx = idxs[rng.gen_range(0..idxs.len())];
             count += self.directed_loop_update(idx);
@@ -424,12 +482,56 @@ impl State {
             plato += 1;
         }
     }
-    pub fn new(latice: &Latice, M: usize, rng: &mut ThreadRng) -> State {
+    pub fn si_operator(&self, weights: &Vec<f64>) -> f64 {
+        let mut sum = 0.0;
+        assert_eq!(
+            weights.len(),
+            self.alpha.len(),
+            "weights must have the same length as alpha"
+        );
+        for (w, a) in weights.iter().zip(self.alpha.iter()) {
+            sum += w * (if *a { 0.5 } else { -0.5 });
+        }
+        sum.abs()
+    }
+    pub fn sample(
+        &mut self,
+        weights: &Vec<f64>,
+        nloop: usize,
+        latice: &Latice,
+        beta: f64,
+        j1: f64,
+        rng: &mut ThreadRng,
+    ) -> (f64, f64) {
+        self.diagonal_update(latice, beta, j1, rng);
+        self.off_diagonal_update(nloop, rng);
+        let si = self.si_operator(weights);
+        ((self.n1 + self.n2) as f64, si)
+    }
+    pub fn sample_avg(
+        &mut self,
+        n: usize,
+        weights: &Vec<f64>,
+        nloop: usize,
+        latice: &Latice,
+        beta: f64,
+        j1: f64,
+        rng: &mut ThreadRng,
+    ) -> (f64, f64) {
+        let mut samples = Vec::new();
+        for _ in 0..n {
+            samples.push(self.sample(weights, nloop, latice, beta, j1, rng));
+        }
+        let mean: f64 = samples.iter().map(|x| x.0).sum::<f64>() / samples.len() as f64;
+        let si_mean: f64 = samples.iter().map(|x| x.1).sum::<f64>() / samples.len() as f64;
+        (mean, si_mean)
+    }
+    pub fn new(latice: &Latice, m: usize, rng: &mut ThreadRng) -> State {
         let mut alpha = Vec::new();
         for _ in 0..latice.width * latice.height {
             alpha.push(rng.gen());
         }
-        let path = vec![None; M];
+        let path = vec![None; m];
         let s = State {
             alpha,
             path,
