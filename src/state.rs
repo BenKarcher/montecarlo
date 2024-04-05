@@ -286,6 +286,8 @@ impl State {
         }
         let mut count = 0;
         if idxs.is_empty() {
+            let site = rng.gen_range(0..self.alpha.len());
+            self.alpha[site] ^= true;
             return 0;
         }
         for _ in 0..nloop {
@@ -302,28 +304,28 @@ impl State {
         j1: f64,
         rng: &mut ThreadRng,
     ) -> usize {
-        let mut nloop = 10;
+        let mut nloop = 40;
         let mut plato = 0;
-        let mut touched = 0;
+        // let mut touched = 0;
         loop {
             self.diagonal_update(latice, beta, j1, rng);
-            touched += self.off_diagonal_update(nloop, rng);
-            if self.n1 + self.n2 > self.path.len() * 8 / 10 {
-                for _ in 0..self.path.len() * 2 / 10 {
-                    self.path.push(None);
-                }
-                nloop = self.path.len() * nloop * plato / touched;
-                if nloop == 0 {
-                    nloop = 1;
-                }
+            self.off_diagonal_update(nloop, rng);
+            while self.n1 + self.n2 > self.path.len() * 9 / 10 {
+                //for _ in 0..self.path.len() * 1 / 10 {
+                self.path.push(None);
+                //}
+                // nloop = self.path.len() * nloop * plato / touched;
+                // if nloop == 0 {
+                //     nloop = 1;
+                // }
                 plato = 0;
             }
             //self.verify();
-            if plato == 10000 {
-                nloop = self.path.len() * nloop * plato / touched;
-                if nloop == 0 {
-                    nloop = 1;
-                }
+            if plato == 20000 {
+                // nloop = self.path.len() * nloop * plato / touched;
+                // if nloop == 0 {
+                //     nloop = 1;
+                // }
                 return nloop;
             }
             plato += 1;

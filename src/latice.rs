@@ -87,7 +87,7 @@ impl Latice {
         for x in 0..self.width {
             for y in 0..self.height {
                 let id = self.node_id(x, y);
-                weights[id] = if (y) % 2 == 0 { 1.0 } else { -1.0 };
+                weights[id] = if (x + y) % 2 == 0 { 1.0 } else { -1.0 };
             }
         }
         weights
