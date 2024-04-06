@@ -1,7 +1,7 @@
-use crate::latice::{EdgeType, Latice};
+use crate::latice::{Bipartite_Vector, Edge, EdgeType, Even_Site_Id, Latice, Odd_Site_Id, Site_Id};
 use rand::{rngs::ThreadRng, Rng};
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum OperatorType {
     //identities are stored as Nones
     D,
@@ -16,152 +16,131 @@ impl OperatorType {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Operator {
     pub operator_type: OperatorType,
-    pub even: usize,
-    pub odd: usize,
+    pub edge: Edge,
     pub even_in_id: usize,
-    pub odd_in_id: usize,
-    pub even_out_id: usize,
     pub odd_out_id: usize,
-    pub edge_type: EdgeType,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct State {
-    pub alpha: Vec<bool>,
+    pub alpha: Bipartite_Vector<bool>,
+    pub last: Bipartite_Vector<Option<usize>>,
     pub path: Vec<Option<Operator>>,
-    pub n1: usize,
-    pub n2: usize,
+    pub n: usize,
+    pub latice: Latice,
 }
 
 impl State {
-    pub fn trace(&self, a: usize, idx: usize, dir: bool) -> usize {
-        for d in 1..self.path.len() {
+    pub fn next_operator(&self, site: Site_Id, idx: usize, dir: bool) -> Option<usize> {
+        for d in 1..=self.path.len() {
             let idx2 = if dir {
                 (idx + d) % self.path.len()
             } else {
                 (idx + self.path.len() - d) % self.path.len()
             };
             if let Some(ref op) = self.path[idx2] {
-                if a % 2 == 0 {
-                    if op.even == a {
-                        return idx2;
+                match site {
+                    Site_Id::Even(even) => {
+                        if op.edge.even == even {
+                            return Some(idx2);
+                        }
                     }
-                } else {
-                    if op.odd == a {
-                        return idx2;
+                    Site_Id::Odd(odd) => {
+                        if op.edge.odd == odd {
+                            return Some(idx2);
+                        }
                     }
                 }
             }
         }
-        idx
+        None
     }
-    pub fn insert_diag(&mut self, even: usize, odd: usize, idx: usize, edge_type: EdgeType) {
+
+    pub fn insert_diag(
+        &mut self,
+        edge: Edge,
+        idx: usize,
+        former: &mut Bipartite_Vector<Option<usize>>,
+    ) {
         assert!(self.path[idx].is_none(), "idx must be empty");
-        match edge_type {
-            EdgeType::One => self.n1 += 1,
-            EdgeType::Two => self.n2 += 1,
-        }
+        self.n += 1;
+        //let even_in_id = former.get_even(edge.even).unwrap_or(idx);
+        let even_in_id = idx; //WRONG BUT WILL BE FIXED IN NEXT PASS
+        let odd_out_id = match former.get_odd(edge.odd) {
+            Some(odd_out_id) => {
+                let next = self.path[*odd_out_id].as_ref().unwrap().odd_out_id;
+                self.path[*odd_out_id].as_mut().unwrap().odd_out_id = idx;
+                next
+            }
+            None => idx,
+        };
+        former.set_even(edge.even, Some(idx));
+        former.set_odd(edge.odd, Some(idx));
         let op = Operator {
             operator_type: OperatorType::D,
-            even,
-            odd,
-            even_in_id: self.trace(even, idx, false),
-            odd_in_id: self.trace(odd, idx, false),
-            even_out_id: self.trace(even, idx, true),
-            odd_out_id: self.trace(odd, idx, true),
-            edge_type: edge_type,
+            edge: edge.clone(),
+            even_in_id,
+            odd_out_id,
         };
-        if op.even_in_id != idx {
-            self.path[op.even_in_id].as_mut().unwrap().even_out_id = idx;
+        match self.last.get_even(edge.even) {
+            None => {
+                self.last.set_even(edge.even, Some(idx));
+            }
+            Some(last_idx) if *last_idx < idx => {
+                self.last.set_even(edge.even, Some(idx));
+            }
+            _ => {}
         }
-        if op.odd_in_id != idx {
-            self.path[op.odd_in_id].as_mut().unwrap().odd_out_id = idx;
+        match self.last.get_odd(edge.odd) {
+            None => {
+                self.last.set_odd(edge.odd, Some(idx));
+            }
+            Some(last_idx) if *last_idx < idx => {
+                self.last.set_odd(edge.odd, Some(idx));
+            }
+            _ => {}
         }
-        if op.even_out_id != idx {
-            self.path[op.even_out_id].as_mut().unwrap().even_in_id = idx;
-        }
-        if op.odd_out_id != idx {
-            self.path[op.odd_out_id].as_mut().unwrap().odd_in_id = idx;
-        }
+
         self.path[idx] = Some(op);
     }
-    pub fn delete(&mut self, idx: usize) {
+    pub fn delete(&mut self, idx: usize, former: &mut Bipartite_Vector<Option<usize>>) {
         let op = self.path[idx].take().unwrap();
-        match op.edge_type {
-            EdgeType::One => self.n1 -= 1,
-            EdgeType::Two => self.n2 -= 1,
+        self.n -= 1;
+        let prev_odd_idx = former.get_odd(op.edge.odd).unwrap();
+        if prev_odd_idx == idx {
+            former.set_odd(op.edge.odd, None);
+        } else {
+            self.path[prev_odd_idx].as_mut().unwrap().odd_out_id = op.odd_out_id;
         }
-        if op.even_in_id != idx {
-            self.path[op.even_in_id].as_mut().unwrap().even_out_id = op.even_out_id;
+        if former.get_even(op.edge.even).unwrap() == idx {
+            former.set_even(op.edge.even, None);
         }
-        if op.odd_in_id != idx {
-            self.path[op.odd_in_id].as_mut().unwrap().odd_out_id = op.odd_out_id;
+        if self.last.get_even(op.edge.even).unwrap() == idx {
+            self.last
+                .set_even(op.edge.even, *former.get_even(op.edge.even));
         }
-        if op.even_out_id != idx {
-            self.path[op.even_out_id].as_mut().unwrap().even_in_id = op.even_in_id;
-        }
-        if op.odd_out_id != idx {
-            self.path[op.odd_out_id].as_mut().unwrap().odd_in_id = op.odd_in_id;
+        if self.last.get_odd(op.edge.odd).unwrap() == idx {
+            self.last.set_odd(op.edge.odd, *former.get_odd(op.edge.odd));
         }
     }
     pub fn verify(&self) {
-        //check that every operator has even evens and odd odds
-        for op in self.path.iter() {
-            if let Some(op) = op {
-                assert_eq!(op.even % 2, 0, "even must be even");
-                assert_eq!(op.odd % 2, 1, "odd must be odd");
-            }
-        }
-        //check that every connection is bidirectional
-        for (i, op) in self.path.iter().enumerate() {
-            if let Some(op) = op {
-                assert_eq!(
-                    self.path[op.even_in_id].as_ref().unwrap().even_out_id,
-                    i,
-                    "even_in_id error"
-                );
-                assert_eq!(
-                    self.path[op.odd_in_id].as_ref().unwrap().odd_out_id,
-                    i,
-                    "odd_in_id error"
-                );
-                assert_eq!(
-                    self.path[op.even_out_id].as_ref().unwrap().even_in_id,
-                    i,
-                    "even_out_id error"
-                );
-                assert_eq!(
-                    self.path[op.odd_out_id].as_ref().unwrap().odd_in_id,
-                    i,
-                    "odd_out_id error"
-                );
-            }
-        }
         //check that every connetion has no other operators interupting it in the same site
         for (idx, op) in self.path.iter().enumerate() {
             if let Some(op) = op {
                 assert_eq!(
-                    self.trace(op.even, idx, true),
-                    op.even_out_id,
-                    "even out trace error"
-                );
-                assert_eq!(
-                    self.trace(op.odd, idx, true),
+                    self.next_operator(Site_Id::Odd(op.edge.odd), idx, true)
+                        .unwrap(),
                     op.odd_out_id,
                     "odd out trace error"
                 );
                 assert_eq!(
-                    self.trace(op.even, idx, false),
+                    self.next_operator(Site_Id::Even(op.edge.even), idx, false)
+                        .unwrap(),
                     op.even_in_id,
                     "even in trace error"
-                );
-                assert_eq!(
-                    self.trace(op.odd, idx, false),
-                    op.odd_in_id,
-                    "odd in trace error"
                 );
             }
         }
@@ -169,49 +148,49 @@ impl State {
         let mut current = self.alpha.clone();
         for (i, op) in self.path.iter().enumerate() {
             if let Some(op) = op {
-                assert_eq!(
-                    current[op.even], !current[op.odd],
+                assert_ne!(
+                    current.get_even(op.edge.even),
+                    current.get_odd(op.edge.odd),
                     "op {} not oposing spins",
                     i
                 );
                 if op.operator_type == OperatorType::OD {
-                    current[op.even] ^= true;
-                    current[op.odd] ^= true;
+                    *current.get_even_mut(op.edge.even) ^= true;
+                    *current.get_odd_mut(op.edge.odd) ^= true;
                 }
             }
         }
         assert_eq!(current, self.alpha, "alpha not a loop");
-        //check that counts of each edge type are correct
-        let mut n1 = 0;
-        let mut n2 = 0;
+        //check that counts of are correct
+        let mut n = 0;
         for op in self.path.iter() {
-            if let Some(op) = op {
-                match op.edge_type {
-                    EdgeType::One => n1 += 1,
-                    EdgeType::Two => n2 += 1,
-                }
+            if op.is_some() {
+                n += 1;
             }
         }
-        assert_eq!(n1, self.n1, "n1 count error");
-        assert_eq!(n2, self.n2, "n2 count error");
+        assert_eq!(n, self.n, "n count error");
     }
     pub fn directed_loop_update(&mut self, start: usize) -> usize {
         let mut idx = start;
         let mut len = 0;
         loop {
             //going up
-            let next = self.path[idx].as_ref().unwrap().even_out_id;
+            let next = self.path[idx].as_ref().unwrap().odd_out_id;
             if next <= idx {
-                self.alpha[self.path[idx].as_ref().unwrap().even] ^= true;
+                *self
+                    .alpha
+                    .get_odd_mut(self.path[idx].as_ref().unwrap().edge.odd) ^= true;
             }
             idx = next;
 
             self.path[idx].as_mut().unwrap().operator_type.flip();
 
             //going down
-            let next = self.path[idx].as_ref().unwrap().odd_in_id;
+            let next = self.path[idx].as_ref().unwrap().even_in_id;
             if next >= idx {
-                self.alpha[self.path[idx].as_ref().unwrap().odd] ^= true;
+                *self
+                    .alpha
+                    .get_even_mut(self.path[idx].as_ref().unwrap().edge.even) ^= true;
             }
             idx = next;
 
@@ -222,59 +201,76 @@ impl State {
             }
         }
     }
-    pub fn diagonal_update(&mut self, latice: &Latice, beta: f64, j1: f64, rng: &mut ThreadRng) {
+    pub fn diagonal_update(&mut self, beta: f64, j1: f64, rng: &mut ThreadRng) {
         let mut current = self.alpha.clone();
-        for i in 0..self.path.len() {
-            let op = &self.path[i];
+        let mut latest = self.last.clone();
+        for idx in 0..self.path.len() {
+            let op = self.path[idx].clone();
             match op {
                 Some(Operator {
                     operator_type: OperatorType::OD,
-                    even,
-                    odd,
+                    edge,
                     ..
                 }) => {
-                    current[*even] ^= true;
-                    current[*odd] ^= true;
+                    // self.path[idx].as_mut().unwrap().even_in_id =
+                    //     latest.get_even(edge.even).unwrap();
+                    *current.get_even_mut(edge.even) ^= true;
+                    *current.get_odd_mut(edge.odd) ^= true;
+                    latest.set_even(edge.even, Some(idx));
+                    latest.set_odd(edge.odd, Some(idx));
                 }
                 Some(Operator {
                     operator_type: OperatorType::D,
-                    edge_type,
+                    edge,
                     ..
                 }) => {
                     //check if removal is accepted
-                    let p = (self.path.len() - self.n1 - self.n2 + 1) as f64
-                        / (latice.edges.len() as f64
+                    // self.path[idx].as_mut().unwrap().even_in_id =
+                    //     latest.get_even(edge.even).unwrap();
+                    let p = (self.path.len() - self.n + 1) as f64
+                        / (self.latice.edges.len() as f64
                             * beta
                             * 0.5
-                            * match edge_type {
+                            * match edge.edge_type {
                                 EdgeType::One => j1,
                                 EdgeType::Two => 1.0,
                             });
                     if rng.gen::<f64>() < p {
                         //if 1.0 < p {
-                        self.delete(i);
+                        self.delete(idx, &mut latest);
+                    } else {
+                        latest.set_even(edge.even, Some(idx));
+                        latest.set_odd(edge.odd, Some(idx));
                     }
                 }
                 None => {
                     //check if insertion is accepted
-                    let edge = latice.random_edge(rng);
-                    if current[edge.even] == current[edge.odd] {
+                    let edge = self.latice.random_edge(rng);
+                    if current.get_even(edge.even) == current.get_odd(edge.odd) {
                         continue;
                     }
-                    let p = (latice.edges.len() as f64
+                    let p = (self.latice.edges.len() as f64
                         * beta
                         * 0.5
                         * match edge.edge_type {
                             EdgeType::One => j1,
                             EdgeType::Two => 1.0,
                         })
-                        / (self.path.len() - self.n1 - self.n2) as f64;
+                        / (self.path.len() - self.n) as f64;
                     if rng.gen::<f64>() < p {
                         //if 0.0 < p {
-                        self.insert_diag(edge.even, edge.odd, i, edge.edge_type);
+                        self.insert_diag(edge, idx, &mut latest);
                     }
                 }
             };
+        }
+        let mut latest = self.last.clone();
+        for idx in 0..self.path.len() {
+            if let Some(op) = self.path[idx].clone() {
+                self.path[idx].as_mut().unwrap().even_in_id =
+                    latest.get_even(op.edge.even).unwrap();
+                self
+            }
         }
     }
     pub fn off_diagonal_update(&mut self, nloop: usize, rng: &mut ThreadRng) -> usize {
@@ -286,8 +282,10 @@ impl State {
         }
         let mut count = 0;
         if idxs.is_empty() {
-            let site = rng.gen_range(0..self.alpha.len());
-            self.alpha[site] ^= true;
+            let even_site = rng.gen_range(0..self.alpha.even.len());
+            self.alpha.even[even_site] ^= true;
+            let odd_site = rng.gen_range(0..self.alpha.odd.len());
+            self.alpha.odd[odd_site] ^= true;
             return 0;
         }
         for _ in 0..nloop {
@@ -297,95 +295,89 @@ impl State {
         count
     }
 
-    pub fn thermalize(
-        &mut self,
-        latice: &Latice,
-        beta: f64,
-        j1: f64,
-        rng: &mut ThreadRng,
-    ) -> usize {
+    pub fn thermalize(&mut self, beta: f64, j1: f64, rng: &mut ThreadRng) -> usize {
         let mut nloop = 40;
         let mut plato = 0;
         // let mut touched = 0;
         loop {
-            self.diagonal_update(latice, beta, j1, rng);
+            self.diagonal_update(beta, j1, rng);
             self.off_diagonal_update(nloop, rng);
-            while self.n1 + self.n2 > self.path.len() * 9 / 10 {
-                //for _ in 0..self.path.len() * 1 / 10 {
+            while self.n > self.path.len() * 9 / 10 {
                 self.path.push(None);
-                //}
-                // nloop = self.path.len() * nloop * plato / touched;
-                // if nloop == 0 {
-                //     nloop = 1;
-                // }
                 plato = 0;
             }
             //self.verify();
             if plato == 20000 {
-                // nloop = self.path.len() * nloop * plato / touched;
-                // if nloop == 0 {
-                //     nloop = 1;
-                // }
                 return nloop;
             }
             plato += 1;
         }
     }
-    pub fn si_operator(&self, weights: &Vec<f64>) -> f64 {
-        let mut sum = 0.0;
-        assert_eq!(
-            weights.len(),
-            self.alpha.len(),
-            "weights must have the same length as alpha"
-        );
-        for (w, a) in weights.iter().zip(self.alpha.iter()) {
-            sum += w * (if *a { 0.5 } else { -0.5 });
-        }
-        sum.abs()
-    }
+    // pub fn si_operator(&self, weights: &Vec<f64>) -> f64 {
+    //     let mut sum = 0.0;
+    //     assert_eq!(
+    //         weights.len(),
+    //         self.alpha.len(),
+    //         "weights must have the same length as alpha"
+    //     );
+    //     for (w, a) in weights.iter().zip(self.alpha.iter()) {
+    //         sum += w * (if *a { 0.5 } else { -0.5 });
+    //     }
+    //     sum.abs()
+    // }
     pub fn sample(
         &mut self,
-        weights: &Vec<f64>,
+        // weights: &Vec<f64>,
         nloop: usize,
-        latice: &Latice,
         beta: f64,
         j1: f64,
         rng: &mut ThreadRng,
-    ) -> (f64, f64) {
-        self.diagonal_update(latice, beta, j1, rng);
+    ) -> f64 {
+        self.diagonal_update(beta, j1, rng);
         self.off_diagonal_update(nloop, rng);
-        let si = self.si_operator(weights);
-        ((self.n1 + self.n2) as f64, si)
+        // let si = self.si_operator(weights);
+        //((self.n1 + self.n2) as f64, si)
+        self.n as f64
     }
     pub fn sample_avg(
         &mut self,
         n: usize,
-        weights: &Vec<f64>,
+        // weights: &Vec<f64>,
         nloop: usize,
-        latice: &Latice,
         beta: f64,
         j1: f64,
         rng: &mut ThreadRng,
-    ) -> (f64, f64) {
+    ) -> f64 {
         let mut samples = Vec::new();
         for _ in 0..n {
-            samples.push(self.sample(weights, nloop, latice, beta, j1, rng));
+            samples.push(self.sample(nloop, beta, j1, rng));
         }
-        let mean: f64 = samples.iter().map(|x| x.0).sum::<f64>() / samples.len() as f64;
-        let si_mean: f64 = samples.iter().map(|x| x.1).sum::<f64>() / samples.len() as f64;
-        (mean, si_mean)
+        let mean: f64 = samples.iter().sum::<f64>() / samples.len() as f64;
+        //let si_mean: f64 = samples.iter().map(|x| x.1).sum::<f64>() / samples.len() as f64;
+        mean
     }
     pub fn new(latice: &Latice, m: usize, rng: &mut ThreadRng) -> State {
-        let mut alpha = Vec::new();
-        for _ in 0..latice.width * latice.height {
-            alpha.push(rng.gen());
+        let mut alpha_even = Vec::new();
+        let mut alpha_odd = Vec::new();
+        for _ in 0..latice.num_even {
+            alpha_even.push(rng.gen());
+        }
+        for _ in 0..latice.num_odd {
+            alpha_odd.push(rng.gen());
         }
         let path = vec![None; m];
         let s = State {
-            alpha,
+            alpha: Bipartite_Vector {
+                even: alpha_even,
+                odd: alpha_odd,
+            },
             path,
-            n1: 0,
-            n2: 0,
+            n: 0,
+            last: Bipartite_Vector {
+                even: vec![None; latice.num_even],
+                odd: vec![None; latice.num_odd],
+            },
+            latice: latice.clone(),
         };
         s.verify();
         s
