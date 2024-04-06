@@ -1,0 +1,70 @@
+
+% !TeX spellcheck = de_DE
+\documentclass[ngerman]{scrartcl} 
+
+%\KOMAoptions{fontsize=12pt, paper=a4}
+%\KOMAoptions{DIV=11}
+\usepackage{float}
+\usepackage[utf8]{inputenc}             % Direkte Eingabe von ä usw.
+\usepackage[T1]{fontenc}               	% Font Kodierung für die Ausgabe
+%\usepackage[ngerman]{babel}                   	% Verschiedenste sprach-spezifische Extras
+\usepackage{parskip}
+% \usepackage[autostyle=true]{csquotes}	% Intelligente Anführungszeichen
+%\usepackage{amsmath}
+\usepackage{amsmath,amsthm,amssymb}% Mathematischer Formelsatz mit zusätzlichen mathematischen Schriften und Symbolen
+\usepackage{amssymb}					% Mathematischer Formelsatz mit zusätzlichen mathematischen Schriften und Symbolen
+\usepackage{physics}					% Differentialgleichungen
+\usepackage{listings}					% Zum Einbinden von Programmcode verwenden wir das listings-Paket
+\usepackage[dvipsnames]{xcolor}			% um Elemente von Befehlen farblich zu unterstützen
+%\usepackage[varg]{txfonts}              % Schönere Schriftart
+\usepackage{graphicx}					% Paket um externe Graphiken einzufügen
+\usepackage{multirow}
+\usepackage{pdflscape}
+\usepackage{geometry}
+\usepackage{media9}
+\RequirePackage[backend=biber, style=numeric]{biblatex} % Literaturverzeichnis
+\usepackage{hyperref} 					% um klickbare Elemente in Ihrem PDF-Ausgabedokument zu erzeugen
+\RequirePackage[all]{hypcap} 			% ergänzend zu hyperref
+\usepackage[separate-uncertainty=true]{siunitx}                    % Intelligentes Setzten von Zahlen und Einheiten
+\sisetup{locale = DE}
+\usepackage{enumitem}					% Aufzählungsarten
+\usepackage{fancyhdr}
+\usepackage{verbatim}
+\usepackage{ytableau}%young diagrams
+\usepackage{dsfont}
+
+
+\setlength\parindent{0pt} 				% Sets paragraph indentation to 0
+
+\lstset{
+	numbers=left, 						% Line numbering
+	numberstyle=\footnotesize, 			% Size of numbers
+	basicstyle=\ttfamily\small, 		% Style and Size of Text
+	backgroundcolor=\color{White}, 		% Background Color
+	language=Python, 					% Language of Code
+	commentstyle=\color{Maroon}, 		% Color and Style of Comments
+	stringstyle=\color{OliveGreen}, 	% Color of Strings
+	showstringspaces=false,
+	morekeywords={import,from,class,def,for,while,if,is,in,elif,else,not,and,or,print,break,continue,return,True,False,None,access,as,del,except,exec,finally,global,import,lambda,pass,print,raise,try,assert}, 									% Definition of new keywords that will be highlighted
+	keywordstyle=\color{RoyalBlue}		% Color and Style of Keywords
+}
+
+
+\addbibresource{references.bib}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{Ben Karcher}
+\lhead{SSE for the dimerization transition on the square lattice}
+\rfoot{Page \thepage}
+
+\title{physics767: Computational Methods in Condensed Matter Theory Final Project}
+\author{Ben Karcher (Matrikelnr.: 3226000)}
+\date{\today}
+
+
+\begin{document}
+\maketitle
+\section*{H 6.1}
+\subsection*{(1)}
+\end{document}
