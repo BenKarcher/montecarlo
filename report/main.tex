@@ -65,6 +65,11 @@
 
 \begin{document}
 \maketitle
-\section*{H 6.1}
-\subsection*{(1)}
+\section*{Introduction}
+In this project, I implemented SSE for the dimerization transition of the square lattice. First, I implemented the standard algorithm, then optimized it and generalized the code to any bipartite lattice, lastly, I looked at the possibilities of running the algorithm in the momentum basis. In this report, I will first outline the model and how to set up the SSE, then go over the algorithm and the results. After that, I will discuss the process of optimizing the algorithm and showcase a variety of tweaks to the algorithm I came up with. In the last section, I will look at running this algorithm in the momentum basis.
+\section*{Setting up SSE}
+We are interested here in the Heisenberg Hamiltonian with 2 different bond types.
+\begin{align*}
+    \hat{H}=J_1\sum_{\left<i,j\right>_1}\Vec{S}_i\cdot\Vec{S}_j + J_2\sum_{\left<i,j\right>_2}\Vec{S}_i\cdot\Vec{S}_j
+\end{align*}
 \end{document}
