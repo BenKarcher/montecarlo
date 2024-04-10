@@ -168,17 +168,26 @@ pub struct Edge {
 pub struct Latice {
     pub num_even: usize,
     pub num_odd: usize,
+    pub edge_count_1: usize,
+    pub edge_count_2: usize,
     pub edges: Vec<Edge>,
     distribution: Uniform<usize>,
 }
 impl Latice {
     pub fn new(num_even: usize, num_odd: usize, edges: Vec<Edge>) -> Latice {
         let distribution = Uniform::new(0, edges.len());
+        let edge_count_1 = edges
+            .iter()
+            .filter(|e| e.edge_type == EdgeType::One)
+            .count();
+        let edge_count_2 = edges.len() - edge_count_1;
         Latice {
             num_even: num_even,
             num_odd: num_odd,
             edges: edges,
-            distribution: distribution,
+            distribution,
+            edge_count_1,
+            edge_count_2,
         }
     }
     pub fn random_edge(&self, rng: &mut ThreadRng) -> Edge {

@@ -268,18 +268,7 @@ impl State {
             plato += 1;
         }
     }
-    // pub fn si_operator(&self, weights: &Vec<f64>) -> f64 {
-    //     let mut sum = 0.0;
-    //     assert_eq!(
-    //         weights.len(),
-    //         self.alpha.len(),
-    //         "weights must have the same length as alpha"
-    //     );
-    //     for (w, a) in weights.iter().zip(self.alpha.iter()) {
-    //         sum += w * (if *a { 0.5 } else { -0.5 });
-    //     }
-    //     sum.abs()
-    // }
+
     pub fn sample(
         &mut self,
         // weights: &Vec<f64>,
@@ -287,30 +276,31 @@ impl State {
         beta: f64,
         j1: f64,
         rng: &mut ThreadRng,
-    ) -> f64 {
+    ) -> (f64, f64) {
         self.diagonal_update(beta, j1, rng);
         self.off_diagonal_update(nloop, rng);
-        // let si = self.si_operator(weights);
-        //((self.n1 + self.n2) as f64, si)
-        self.n as f64
-    }
-    pub fn sample_avg(
-        &mut self,
-        n: usize,
-        // weights: &Vec<f64>,
-        nloop: usize,
-        beta: f64,
-        j1: f64,
-        rng: &mut ThreadRng,
-    ) -> f64 {
-        let mut samples = Vec::new();
-        for _ in 0..n {
-            samples.push(self.sample(nloop, beta, j1, rng));
+
+        let energy = -(self.n as f64) / beta
+            + j1 * self.latice.edge_count_1 as f64 / 4.0
+            + self.latice.edge_count_2 as f64 / 4.0;
+        let mut sm: f64 = 0.0;
+        for (_, spin) in &self.alpha.even {
+            if *spin {
+                sm += 0.5;
+            } else {
+                sm -= 0.5;
+            }
         }
-        let mean: f64 = samples.iter().sum::<f64>() / samples.len() as f64;
-        //let si_mean: f64 = samples.iter().map(|x| x.1).sum::<f64>() / samples.len() as f64;
-        mean
+        for (_, spin) in &self.alpha.odd {
+            if *spin {
+                sm -= 0.5;
+            } else {
+                sm += 0.5;
+            }
+        }
+        (energy, sm.abs())
     }
+
     pub fn new(latice: &Latice, m: usize, rng: &mut ThreadRng) -> State {
         let mut alpha_even = IdVec::new();
         let mut alpha_odd = IdVec::new();

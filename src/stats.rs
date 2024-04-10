@@ -10,7 +10,7 @@ fn calc_sd(samples: &Vec<f64>) -> f64 {
     variance.sqrt()
 }
 
-pub fn bin(data: Vec<f64>, bin_size: usize) -> Vec<f64> {
+pub fn bin(data: &Vec<f64>, bin_size: usize) -> Vec<f64> {
     let mut binned = Vec::new();
     let mut sum = 0.0;
     for (i, &x) in data.iter().enumerate() {
@@ -26,7 +26,7 @@ pub fn bin(data: Vec<f64>, bin_size: usize) -> Vec<f64> {
     binned
 }
 
-pub fn bootstrap(data: Vec<f64>, n: usize) -> (f64, f64) {
+pub fn bootstrap(data: &Vec<f64>, n: usize) -> (f64, f64) {
     let mut rng = rand::thread_rng();
     let mut means = Vec::new();
     for _ in 0..n {
@@ -41,10 +41,15 @@ pub fn bootstrap(data: Vec<f64>, n: usize) -> (f64, f64) {
     (mean, sd)
 }
 
-pub fn write_csv(filename: &str, x_data: &Vec<f64>, y_data: &Vec<f64>) {
+pub fn write_csv(filename: &str, data: &Vec<&Vec<f64>>) {
     let mut wtr = csv::Writer::from_path(filename).unwrap();
-    for (x, y) in x_data.iter().zip(y_data.iter()) {
-        wtr.write_record(&[x.to_string(), y.to_string()]).unwrap();
+    //write the vecs in parallel
+    for i in 0..data[0].len() {
+        let mut record = Vec::new();
+        for j in 0..data.len() {
+            record.push(data[j][i].to_string());
+        }
+        wtr.write_record(record).unwrap();
     }
     wtr.flush().unwrap();
 }

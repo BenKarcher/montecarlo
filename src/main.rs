@@ -44,77 +44,31 @@ fn main() {
 
     let beta = 16.0;
 
-    // let mut m_data = Vec::new();
-    // let mut n_data = Vec::new();
-    // let mut touched = Vec::new();
-    // let mut steps = Vec::new();
-
-    // for i in 0..20000 {
-    //     s.diagonal_update(&latice, beta, 0.5, rng);
-    //     touched.push(s.off_diagonal_update(40, rng) as f64);
-    //     let n = s.n1 + s.n2;
-    //     while n > s.path.len() * 9 / 10 {
-    //         s.path.push(None);
-    //     }
-    //     n_data.push(n as f64);
-    //     m_data.push(s.path.len() as f64);
-    //     steps.push(i as f64);
-    // }
-    // write_csv("data.csv", &steps, &m_data);
-    // write_csv("data2.csv", &steps, &touched);
-    //let j1 = 1.0;
-    //let weights = latice.staggered_magnetization_weights();
-    //let nloop = s.thermalize(&latice, beta, 0.0, rng);
-
-    // let js = range(0.0, 2.0, 20);
-    // let mut y_data = Vec::new();
-    // for j1 in js.clone() {
-    //     let mut s = State::new(&latice, 10, rng);
-    //     let nloop = s.thermalize(&latice, beta, j1, rng);
-    //     let (mean_n, mag) = s.sample_avg(1000, &weights, 40, &latice, beta, j1, rng);
-    //     let energy = -mean_n / beta + latice.edges.len() as f64 / 4.0;
-    //     y_data.push(energy);
-    // }
-    // println!("start");
-    // //println!("latice: {:?}", latice.edges);
-    // let mut s = State::new(&latice, 4, rng);
-    // //s.thermalize(beta, j1, rng);
-    // for _ in 0..200000 {
-    //     s.diagonal_update(beta, 0.5, rng);
-    //     //println!("n: {}", s.n);
-    //     s.verify();
-    //     s.off_diagonal_update(40, rng);
-    //     s.verify();
-    // }
-
     let js = range(0.0, 2.0, 20);
-    let mut y_data = Vec::new();
+    let mut energy = Vec::new();
+    let mut deltaE = Vec::new();
+    let mut sm = Vec::new();
+    let mut deltaSM = Vec::new();
+
     for j1 in js.clone() {
-        let mut measurments = Vec::new();
+        let mut energys = Vec::new();
+        let mut sms = Vec::new();
+
         let mut s = State::new(&latice, 10, rng);
         s.thermalize(beta, j1, rng);
-        // for _ in 0..200000 {
-        //     s.diagonal_update(beta, j1, rng);
-        //     s.verify();
-        //     // s.off_diagonal_update(40, rng);
-        //     // s.verify();
-        // }
-        println!("thermalized");
-        for _ in 0..10000 {
-            s.diagonal_update(beta, j1, rng);
-            s.off_diagonal_update(40, rng);
-            measurments.push(s.n as f64);
+        for _ in 0..1000000 {
+            let (energy, sm) = s.sample(40, beta, j1, rng);
+            energys.push(energy);
+            sms.push(sm);
         }
-        let mean: f64 = measurments.iter().sum::<f64>() as f64 / measurments.len() as f64;
-        let n_bonds_1 = latice
-            .edges
-            .iter()
-            .filter(|e| e.edge_type == EdgeType::One)
-            .count() as f64;
-        let n_bonds_2 = latice.edges.len() as f64 - n_bonds_1;
-        let energy = -mean / beta + j1 * n_bonds_1 as f64 / 4.0 + n_bonds_2 as f64 / 4.0;
-        y_data.push(energy);
-        println!("energy: {}", energy);
+        let energys = stats::bin(&energys, 1000);
+        let sms = stats::bin(&sms, 1000);
+        let (mean_energy, sd_energy) = stats::bootstrap(&energys, 1000);
+        let (mean_sm, sd_sm) = stats::bootstrap(&sms, 1000);
+        energy.push(mean_energy);
+        deltaE.push(sd_energy);
+        sm.push(mean_sm);
+        deltaSM.push(sd_sm);
     }
-    write_csv("data.csv", &js, &y_data);
+    write_csv("data.csv", &vec![&js, &energy, &deltaE, &sm, &deltaSM]);
 }
