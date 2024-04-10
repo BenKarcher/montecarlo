@@ -1,9 +1,8 @@
-mod latice;
-mod new_rep;
+mod lattice;
 mod state;
 mod stats;
 
-use crate::latice::{new_rectangle, EdgeType, Latice};
+use crate::lattice::{new_rectangle, EdgeType, Lattice};
 use crate::state::State;
 use crate::stats::write_csv;
 use rand::{rngs::ThreadRng, Rng};
@@ -18,7 +17,7 @@ pub fn range(min: f64, max: f64, n: usize) -> Vec<f64> {
     v
 }
 
-pub fn make_latice(width: usize, height: usize) -> Latice {
+pub fn make_latice(width: usize, height: usize) -> Lattice {
     let mut constructor = new_rectangle(width, height);
     for x in 0..width {
         for y in 0..height {

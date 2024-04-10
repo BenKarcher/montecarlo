@@ -1,4 +1,6 @@
-use crate::latice::{Bipartite_Id_Vec, Edge, EdgeType, Even_Site_Id, Latice, Odd_Site_Id, Site_Id};
+use crate::lattice::{
+    Bipartite_Id_Vec, Edge, EdgeType, Even_Site_Id, Lattice, Odd_Site_Id, Site_Id,
+};
 use id_collections::{id_type, Id, IdVec};
 use rand::{rngs::ThreadRng, Rng};
 
@@ -33,7 +35,7 @@ pub struct State {
     pub alpha: Bipartite_Id_Vec<bool>,
     pub path: IdVec<OperatorId, Option<Operator>>,
     pub n: usize,
-    pub latice: Latice,
+    pub latice: Lattice,
 }
 
 impl State {
@@ -301,7 +303,7 @@ impl State {
         (energy, sm.abs())
     }
 
-    pub fn new(latice: &Latice, m: usize, rng: &mut ThreadRng) -> State {
+    pub fn new(latice: &Lattice, m: usize, rng: &mut ThreadRng) -> State {
         let mut alpha_even = IdVec::new();
         let mut alpha_odd = IdVec::new();
         for _ in 0..latice.num_even {

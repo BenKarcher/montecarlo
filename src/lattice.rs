@@ -93,7 +93,7 @@ impl<T: Eq + Clone> LatticeConstructor<T> {
         }
         (even, odd)
     }
-    pub fn build(self) -> Latice {
+    pub fn build(self) -> Lattice {
         let (even, odd) = self.get_bipartite_coloring();
         let mut edges = Vec::new();
         for edge in self.edges.iter() {
@@ -111,7 +111,7 @@ impl<T: Eq + Clone> LatticeConstructor<T> {
                 odd: Odd_Site_Id(odd_id),
             });
         }
-        Latice::new(even.len(), odd.len(), edges)
+        Lattice::new(even.len(), odd.len(), edges)
     }
 }
 
@@ -165,7 +165,7 @@ pub struct Edge {
 }
 
 #[derive(Clone, Debug)]
-pub struct Latice {
+pub struct Lattice {
     pub num_even: usize,
     pub num_odd: usize,
     pub edge_count_1: usize,
@@ -173,15 +173,15 @@ pub struct Latice {
     pub edges: Vec<Edge>,
     distribution: Uniform<usize>,
 }
-impl Latice {
-    pub fn new(num_even: usize, num_odd: usize, edges: Vec<Edge>) -> Latice {
+impl Lattice {
+    pub fn new(num_even: usize, num_odd: usize, edges: Vec<Edge>) -> Lattice {
         let distribution = Uniform::new(0, edges.len());
         let edge_count_1 = edges
             .iter()
             .filter(|e| e.edge_type == EdgeType::One)
             .count();
         let edge_count_2 = edges.len() - edge_count_1;
-        Latice {
+        Lattice {
             num_even: num_even,
             num_odd: num_odd,
             edges: edges,
