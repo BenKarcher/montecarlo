@@ -25,7 +25,11 @@
 \RequirePackage[backend=biber, style=numeric]{biblatex} % Literaturverzeichnis
 \usepackage{hyperref} 					% um klickbare Elemente in Ihrem PDF-Ausgabedokument zu erzeugen
 \RequirePackage[all]{hypcap} 			% ergänzend zu hyperref
-\usepackage[separate-uncertainty=true]{siunitx}                    % Intelligentes Setzten von Zahlen und Einheiten
+\usepackage[separate-uncertainty=true]{siunitx}          
+\usepackage{nicefrac}
+\usepackage{bbold}
+
+% Intelligentes Setzten von Zahlen und Einheiten
 \sisetup{locale = DE}
 \usepackage{enumitem}					% Aufzählungsarten
 \usepackage{fancyhdr}
@@ -68,8 +72,49 @@
 \section*{Introduction}
 In this project, I implemented SSE for the dimerization transition of the square lattice. First, I implemented the standard algorithm, then optimized it and generalized the code to any bipartite lattice, lastly, I looked at the possibilities of running the algorithm in the momentum basis. In this report, I will first outline the model and how to set up the SSE, then go over the algorithm and the results. After that, I will discuss the process of optimizing the algorithm and showcase a variety of tweaks to the algorithm I came up with. In the last section, I will look at running this algorithm in the momentum basis.
 \section*{Setting up SSE}
-We are interested here in the Heisenberg Hamiltonian with 2 different bond types.
+We are interested here in the Heisenberg Hamiltonian with 2 different bond types. First, we split the Hamiltonian as follows:
 \begin{align*}
-    \hat{H}=J_1\sum_{\left<i,j\right>_1}\Vec{S}_i\cdot\Vec{S}_j + J_2\sum_{\left<i,j\right>_2}\Vec{S}_i\cdot\Vec{S}_j
+    \hat{H}&=J_1\sum_{\left<i,j\right>_1}\Vec{S}_i\cdot\Vec{S}_j + J_2\sum_{\left<i,j\right>_2}\Vec{S}_i\cdot\Vec{S}_j\\
+    &=\sum_{t\in \left\{1,2\right\}}J_t\sum_{\left<i,j\right>_t}\vec{S}_i\cdot \vec{S}_j\\
+    &=\sum_{t\in \left\{1,2\right\}}J_t\sum_{\left<i,j\right>_t} \frac{1}{2}\left(S_i^+S_j^-+S_i^-S_j^+\right)+S_i^ZS_j^Z
 \end{align*}
+Since each term acts only on a subspace of the Hilbert space spanned by two sites, we can express these as 2 particle operators. 
+\begin{align*}
+    \hat{H}&=\sum_{t\in \left\{1,2\right\}}\sum_{\left<i,j\right>_t} J_t\begin{pmatrix}
+        0 & 0 & 0 & 0\\
+        0 & 0 & \nicefrac{1}{2} & 0 \\
+        0 & \nicefrac{1}{2} & 0 & 0\\
+        0 & 0 & 0 & 0
+    \end{pmatrix}+
+    J_t\begin{pmatrix}
+        \nicefrac{1}{4} & 0 & 0 & 0\\
+        0 & -\nicefrac{1}{4} & 0 & 0 \\
+        0 & 0 & -\nicefrac{1}{4} & 0\\
+        0 & 0 & 0 & \nicefrac{1}{4}
+    \end{pmatrix}\\
+    &=\underbrace{\sum_{t\in \left\{1,2\right\}}\sum_{\left<i,j\right>_t} \underbrace{J_t\begin{pmatrix}
+        0 & 0 & 0 & 0\\
+        0 & 0 & \nicefrac{1}{2} & 0 \\
+        0 & \nicefrac{1}{2} & 0 & 0\\
+        0 & 0 & 0 & 0
+    \end{pmatrix}}_{H^\text{OD}_{i,j}}-
+    \underbrace{J_t\begin{pmatrix}
+        0 & 0 & 0 & 0\\
+        0 & \nicefrac{1}{2} & 0 & 0 \\
+        0 & 0 & \nicefrac{1}{2} & 0\\
+        0 & 0 & 0 & 0
+    \end{pmatrix}}_{H^\text{D}_{i,j}}}_{\hat{\widetilde{H}}} +J_t \frac{\mathbb{1}}{4}
+\end{align*}
+We simulate $\hat{\widetilde{H}}$ because the shift in energy does not change the underlying physics of the system. Writing $\hat{\widetilde{H}}$ in this form is advantageous as both $H^\text{D}$ and $H^\text{OD}$ are branchless, meaning they map one basis state to one other basis state without producing superpositions. This is critical for the SSE algorithm because the Markov chain acts on individual states along with a chain of operators that take the state back to itself.
+
+Using this, we can rewrite the partition function as follows:
+\begin{align*}
+    Z:&=\sum_\alpha \bra{\alpha}e^{-\beta\hat{\widetilde{H}}}\ket{\alpha}\\
+    &=\sum_{\alpha,n}\bra{\alpha}\frac{\left(-\beta\right)^n}{n!}\hat{\widetilde{H}}^n\ket{\alpha}\\
+    &=\sum_{\alpha,n}\bra{\alpha}\frac{\beta^n}{n!}\left(-\hat{\widetilde{H}}\right)^n\ket{\alpha}\\
+    &=\sum_{\alpha,n}\frac{\beta^n}{n!}\sum_{\overset{b\in \text{Bonds}^n}{x \in \left\{\text{D},\text{OD}\right\}^n}} \bra{\alpha} \prod_{i=1}^{n} H_{b_i}^{x_i} \ket{\alpha}
+\end{align*}
+Note that in the last step, the minus signs that would be before each $H^\text{OD}$ cancel out since on a bipartite lattice we always require an even number of steps to return to our starting alpha.
+
+This sum can then be computed using Monte Carlo integration. I will not re-derive all the acceptance probabilities here, as those are all the same as in the lecture. Any changes necessary are discussed in the implementation section.
 \end{document}
