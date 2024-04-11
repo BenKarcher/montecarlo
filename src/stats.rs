@@ -1,10 +1,10 @@
 use rand::{rngs::ThreadRng, Rng};
 
-fn calc_mean(samples: &Vec<f64>) -> f64 {
+pub fn calc_mean(samples: &Vec<f64>) -> f64 {
     samples.iter().sum::<f64>() / samples.len() as f64
 }
 
-fn calc_sd(samples: &Vec<f64>) -> f64 {
+pub fn calc_sd(samples: &Vec<f64>) -> f64 {
     let mean = calc_mean(samples);
     let variance = samples.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / samples.len() as f64;
     variance.sqrt()
@@ -15,7 +15,7 @@ pub fn bin(data: &Vec<f64>, bin_size: usize) -> Vec<f64> {
     let mut sum = 0.0;
     for (i, &x) in data.iter().enumerate() {
         sum += x;
-        if i % bin_size == 0 {
+        if (i + 1) % bin_size == 0 {
             binned.push(sum / bin_size as f64);
             sum = 0.0;
         }
@@ -41,7 +41,7 @@ pub fn bootstrap(data: &Vec<f64>, n: usize) -> (f64, f64) {
     (mean, sd)
 }
 
-pub fn write_csv(filename: &str, data: &Vec<&Vec<f64>>) {
+pub fn write_csv(filename: &str, data: &Vec<Vec<f64>>) {
     let mut wtr = csv::Writer::from_path(filename).unwrap();
     //write the vecs in parallel
     for i in 0..data[0].len() {

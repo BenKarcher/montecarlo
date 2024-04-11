@@ -264,13 +264,48 @@ impl State {
                 plato = 0;
             }
             //self.verify();
-            if plato == 20000 {
+            if plato == 5000 {
                 return nloop;
             }
             plato += 1;
         }
     }
-
+    pub fn staggered_magnetization(&self) -> f64 {
+        let mut sum: f64 = 0.0;
+        let mut points = 0.0;
+        let mut current = self.alpha.clone();
+        let mut current_sm: f64 = 0.0;
+        for (_, spin) in &current.even {
+            if *spin {
+                current_sm += 0.5;
+            } else {
+                current_sm -= 0.5;
+            }
+        }
+        for (_, spin) in &current.odd {
+            if *spin {
+                current_sm -= 0.5;
+            } else {
+                current_sm += 0.5;
+            }
+        }
+        for (_, op) in self.path.iter() {
+            if let Some(op) = op {
+                if op.operator_type == OperatorType::OD {
+                    if current.even[op.edge.even] {
+                        current_sm -= 2.0;
+                    } else {
+                        current_sm += 2.0;
+                    }
+                    current.even[op.edge.even] ^= true;
+                    current.odd[op.edge.odd] ^= true;
+                }
+            }
+            sum += current_sm.abs();
+            points += 1.0;
+        }
+        sum / points
+    }
     pub fn sample(
         &mut self,
         // weights: &Vec<f64>,
@@ -285,22 +320,8 @@ impl State {
         let energy = -(self.n as f64) / beta
             + j1 * self.latice.edge_count_1 as f64 / 4.0
             + self.latice.edge_count_2 as f64 / 4.0;
-        let mut sm: f64 = 0.0;
-        for (_, spin) in &self.alpha.even {
-            if *spin {
-                sm += 0.5;
-            } else {
-                sm -= 0.5;
-            }
-        }
-        for (_, spin) in &self.alpha.odd {
-            if *spin {
-                sm -= 0.5;
-            } else {
-                sm += 0.5;
-            }
-        }
-        (energy, sm.abs())
+        let sm = self.staggered_magnetization();
+        (energy, sm)
     }
 
     pub fn new(latice: &Lattice, m: usize, rng: &mut ThreadRng) -> State {
